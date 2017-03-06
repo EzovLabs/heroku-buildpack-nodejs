@@ -4,7 +4,7 @@ list_dependencies() {
   cd "$build_dir"
   if $YARN; then
     echo ""
-    (yarn ls || true) 2>/dev/null
+    (yarn list --depth=0 || true) 2>/dev/null
     echo ""
   else
     (npm ls --depth=0 | tail -n +2 || true) 2>/dev/null
@@ -28,10 +28,9 @@ run_if_present() {
 yarn_node_modules() {
   local build_dir=${1:-}
 
-  echo "Installing node modules (yarn)"
-  rm -rf "$build_dir/node_modules"  # with a deterministic package manager, there's no longer any reason to check in node_modules
+  echo "Installing node modules (yarn.lock)"
   cd "$build_dir"
-  yarn install --no-lockfile 2>&1
+  yarn install --pure-lockfile --ignore-engines 2>&1
 }
 
 npm_node_modules() {

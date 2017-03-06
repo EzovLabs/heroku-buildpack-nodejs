@@ -9,15 +9,15 @@ needs_resolution() {
 
 install_yarn() {
   local dir="$1"
-  local version=${2:-latest}
+  local version="$2"
 
-  if [ "$version" = 'latest' ]; then
-    local download_url="https://yarnpkg.com/latest.tar.gz"
-  else
-    local download_url="https://yarnpkg.com/downloads/$version/yarn-v$version.tar.gz"
+  if needs_resolution "$version"; then
+    echo "Resolving yarn version ${version:-(latest)} via semver.io..."
+    local version=$(curl --silent --get --retry 5 --retry-max-time 15 --data-urlencode "range=${version}" https://semver.herokuapp.com/yarn/resolve)
   fi
 
   echo "Downloading and installing yarn ($version)..."
+  local download_url="https://yarnpkg.com/downloads/$version/yarn-v$version.tar.gz"
   local code=$(curl "$download_url" -L --silent --fail --retry 5 --retry-max-time 15 -o /tmp/yarn.tar.gz --write-out "%{http_code}")
   if [ "$code" != "200" ]; then
     echo "Unable to download yarn: $code" && false
@@ -35,11 +35,11 @@ install_yarn() {
 }
 
 install_nodejs() {
-  local version="$1"
+  local version=${1:-6.x}
   local dir="$2"
 
   if needs_resolution "$version"; then
-    echo "Resolving node version ${version:-(latest stable)} via semver.io..."
+    echo "Resolving node version $version via semver.io..."
     local version=$(curl --silent --get --retry 5 --retry-max-time 15 --data-urlencode "range=${version}" https://semver.herokuapp.com/node/resolve)
   fi
 

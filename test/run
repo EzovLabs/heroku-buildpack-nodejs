@@ -1,6 +1,80 @@
 #!/usr/bin/env bash
 # See README.md for info on running these tests.
 
+testNoVersion() {
+  compile "no-version"
+  assertCaptured "engines.node (package.json):  unspecified"
+  assertCaptured "Resolving node version 6.x via semver.io"
+  assertCaptured "Downloading and installing node 6."
+  assertCapturedSuccess
+}
+
+testDisableCache() {
+  cache=$(mktmpdir)
+  env_dir=$(mktmpdir)
+
+  echo "true" > $env_dir/NODE_VERBOSE
+  compile "node-modules-cache-1" $cache $env_dir
+  assertCaptured "lodash@1.0.0"
+  assertEquals "1" "$(ls -1 $cache/node/node_modules | grep lodash | wc -l | tr -d ' ')"
+  assertCapturedSuccess
+
+  compile "node-modules-cache-2" $cache $env_dir
+  assertCaptured "lodash@1.0.0"
+  assertCaptured "Saving 2 cacheDirectories"
+  assertCapturedSuccess
+
+  echo "false" > $env_dir/NODE_MODULES_CACHE
+  compile "node-modules-cache-2" $cache $env_dir
+  assertCaptured "lodash@1.3.1"
+  assertNotCaptured "Saving 2 cacheDirectories"
+  assertCapturedSuccess
+}
+
+testNodeModulesCached() {
+  cache=$(mktmpdir)
+
+  compile "caching" $cache
+  assertCaptured "Saving 2 cacheDirectories (default)"
+  assertCaptured "- node_modules"
+  assertCaptured "- bower_components (nothing to cache)"
+  assertEquals "1" "$(ls -1 $cache/node/node_modules | grep express | wc -l | tr -d ' ')"
+  assertCapturedSuccess
+}
+
+testYarn() {
+  compile "yarn"
+  assertCaptured "installing yarn"
+  assertCaptured "Installing node modules (yarn.lock)"
+  assertNotCaptured "Installing node modules (package.json"
+  assertCapturedSuccess
+}
+
+testBuildWithCache() {
+  cache=$(mktmpdir)
+
+  compile "stable-node" $cache
+  assertCaptured "Skipping cache restore (new runtime"
+  assertEquals "1" "$(ls -1 $cache/node/node_modules | grep hashish | wc -l | tr -d ' ')"
+  assertCapturedSuccess
+
+  compile "stable-node" $cache
+  assertNotCaptured "- node_modules (not cached - skipping)"
+  assertCapturedSuccess
+
+  rm -rf "$cache/node/node_modules"
+  compile "stable-node" $cache
+  assertCaptured "- node_modules (not cached - skipping)"
+  assertCapturedSuccess
+}
+
+testYarnSemver() {
+  compile "yarn-semver"
+  assertCaptured "Resolving yarn version ~0.17"
+  assertCaptured "installing yarn (0.17."
+  assertCapturedSuccess
+}
+
 testYarnRun() {
   compile "yarn-run"
   assertCaptured "Running heroku-postbuild (yarn)"
@@ -11,14 +85,6 @@ testYarnRun() {
 testYarnEngine() {
   compile "yarn-engine"
   assertCaptured "installing yarn (0.16.1)"
-  assertCapturedSuccess
-}
-
-testYarn() {
-  compile "yarn"
-  assertCaptured "installing yarn (latest)"
-  assertCaptured "Installing node modules (yarn)"
-  assertNotCaptured "Installing node modules (package.json"
   assertCapturedSuccess
 }
 
@@ -109,27 +175,6 @@ testMultipleRuns() {
   assertCapturedSuccess
 }
 
-testDisableCache() {
-  cache=$(mktmpdir)
-  env_dir=$(mktmpdir)
-
-  compile "node-modules-cache-1" $cache
-  assertCaptured "lodash@1.0.0"
-  assertEquals "1" "$(ls -1 $cache/node/node_modules | grep lodash | wc -l | tr -d ' ')"
-  assertCapturedSuccess
-
-  compile "node-modules-cache-2" $cache
-  assertCaptured "lodash@1.0.0"
-  assertCaptured "Saving 2 cacheDirectories"
-  assertCapturedSuccess
-
-  echo "false" > $env_dir/NODE_MODULES_CACHE
-  compile "node-modules-cache-2" $cache $env_dir
-  assertCaptured "lodash@1.3.1"
-  assertNotCaptured "Saving 2 cacheDirectories"
-  assertCapturedSuccess
-}
-
 testBowerAngularResolution() {
   compile "bower-angular-resolution"
   assertCaptured "Bower may need a resolution hint for angular"
@@ -148,17 +193,6 @@ testBadJson() {
   assertCaptured "We're sorry this build is failing"
   assertNotCaptured "Installing binaries"
   assertCapturedError 1 "Unable to parse"
-}
-
-testNodeModulesCached() {
-  cache=$(mktmpdir)
-
-  compile "caching" $cache
-  assertCaptured "Saving 2 cacheDirectories (default)"
-  assertCaptured "- node_modules"
-  assertCaptured "- bower_components (nothing to cache)"
-  assertEquals "1" "$(ls -1 $cache/node | grep node_modules | wc -l | tr -d ' ')"
-  assertCapturedSuccess
 }
 
 testBuildWithUserCacheDirectoriesCamel() {
@@ -227,24 +261,6 @@ testInvalidIo() {
   assertCapturedError
 }
 
-testBuildWithCache() {
-  cache=$(mktmpdir)
-
-  compile "stable-node" $cache
-  assertCaptured "Skipping cache restore (new runtime"
-  assertEquals "1" "$(ls -1 $cache/node | grep node_modules | wc -l | tr -d ' ')"
-  assertCapturedSuccess
-
-  compile "stable-node" $cache
-  assertNotCaptured "- node_modules (not cached - skipping)"
-  assertCapturedSuccess
-
-  rm -rf "$cache/node/node_modules"
-  compile "stable-node" $cache
-  assertCaptured "- node_modules (not cached - skipping)"
-  assertCapturedSuccess
-}
-
 testSignatureInvalidation() {
   cache=$(mktmpdir)
   env_dir=$(mktmpdir)
@@ -289,14 +305,6 @@ testIoJs() {
   assertCaptured "engines.iojs (package.json):  1.0."
   assertCaptured "Downloading and installing iojs 1.0."
   assertNotCaptured "Downloading and installing npm"
-  assertCapturedSuccess
-}
-
-testNoVersion() {
-  compile "no-version"
-  assertCaptured "engines.node (package.json):  unspecified"
-  assertCaptured "Resolving node version (latest stable) via semver.io"
-  assertCaptured "Downloading and installing node 6."
   assertCapturedSuccess
 }
 
@@ -390,7 +398,7 @@ testDangerousRangeStar() {
   compile "dangerous-range-star"
   assertCaptured "Dangerous semver range"
   assertCaptured "Resolving node version * via semver.io"
-  assertCaptured "Downloading and installing node 6."
+  assertCaptured "Downloading and installing node 7."
   assertCapturedError
 }
 
@@ -398,14 +406,14 @@ testDangerousRangeGreaterThan() {
   compile "dangerous-range-greater-than"
   assertCaptured "Dangerous semver range"
   assertCaptured "Resolving node version >0.4 via semver.io"
-  assertCaptured "Downloading and installing node 6."
+  assertCaptured "Downloading and installing node 7."
   assertCapturedError
 }
 
 testRangeWithSpace() {
   compile "range-with-space"
   assertCaptured "Resolving node version >= 0.8.x via semver.io"
-  assertCaptured "Downloading and installing node 6."
+  assertCaptured "Downloading and installing node 7."
   assertCapturedSuccess
 }
 
